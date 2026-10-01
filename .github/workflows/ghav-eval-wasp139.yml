@@ -1,0 +1,61 @@
+name: GHAV Wasp 139 Ubuntu Stack cache
+
+on:
+  push:
+    branches:
+      - 'codex/ghav-wasp139-*'
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+    working-directory: waspc
+
+jobs:
+  build:
+    name: Build Wasp and run tests
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    steps:
+      - name: Checkout fixed historical source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: b30dfe907990c361186f688bb64ee5174b0bd1c6
+          persist-credentials: false
+
+      - name: Set up cache
+        id: stack-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: |
+            $HOME/.ghc
+            $HOME/.cabal
+            $HOME/.stack
+          key: haskell-${{ runner.os }}-${{ hashFiles('waspc/stack.yaml') }}
+
+      - name: Set up historical compiler and fixed Stack
+        uses: haskell/actions/setup@0aae96ddcad9a0a4530d63813c056e063401f141
+        with:
+          ghc-version: '8.8.4'
+          cabal-version: '3.2.0.0'
+          cabal-update: false
+          enable-stack: true
+          stack-version: '3.11.1'
+
+      - name: Verify environment and fixed source
+        run: |
+          stack --numeric-version
+          ghc --version
+          echo "GHAV_SOURCE_SHA=$(git rev-parse HEAD)"
+          echo "GHAV_STACK_YAML_SHA=$(sha256sum stack.yaml | cut -d ' ' -f1)"
+          echo "GHAV_CACHE_HIT=${{ steps.stack-cache.outputs.cache-hit }}"
+          echo "GHAV_CACHE_PRIMARY_KEY=${{ steps.stack-cache.outputs.cache-primary-key }}"
+          echo "GHAV_CACHE_MATCHED_KEY=${{ steps.stack-cache.outputs.cache-matched-key }}"
+
+      - name: Build dependencies
+        run: stack --install-ghc test --only-dependencies
+
+      - name: Build Wasp and run tests
+        run: stack test
