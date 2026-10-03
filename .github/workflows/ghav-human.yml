@@ -1,0 +1,21 @@
+name: "ghav human: Test - Wasp Packages"
+"on":
+  push:
+    branches:
+      - ghav/dev/4924
+    paths:
+      - .ghav/human
+env:
+  WASP_TELEMETRY_DISABLE: 1
+jobs:
+  test-packages:
+    name: Test Wasp packages
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-tools
+      - name: Test all packages
+        working-directory: waspc
+        run: ./run test:packages

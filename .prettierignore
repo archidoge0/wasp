@@ -11,3 +11,5 @@ web/**/*.md
 web/**/*.mdx
 web/static/img/
 waspc/data/packages/studio/public/assets/
+# ghav harness files
+.github/workflows/ghav-*.yml

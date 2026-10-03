@@ -1,0 +1,35 @@
+name: "ghav before: Test - TS Spec"
+"on":
+  push:
+    branches:
+      - ghav/dev/4924
+    paths:
+      - .ghav/before
+env:
+  WASP_TELEMETRY_DISABLE: 1
+jobs:
+  test-wasp-spec:
+    name: Test @wasp.sh/spec
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-tools
+      - name: Install @wasp.sh/spec dependencies
+        working-directory: waspc/data/packages/spec
+        run: npm ci
+      - name: Run @wasp.sh/spec tests
+        working-directory: waspc/data/packages/spec
+        run: npm run test
+  test-packages:
+    name: Test Wasp packages
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-tools
+      - name: Test all packages
+        working-directory: waspc
+        run: ./run test:packages
