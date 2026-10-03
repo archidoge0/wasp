@@ -1,72 +1,53 @@
 name: Setup dev tools
-description: >
-  This action sets up our Mise-defined dev tools and environment for use in
-  actions. It also sets up caches for package manager dependencies.
-
+description: |
+  This action sets up our Mise-defined dev tools and environment for use in actions. It also sets up caches for package manager dependencies.
 inputs:
   haskell:
     description: Whether to install Haskell tools (ghcup, cabal, etc.) or not.
     required: false
     default: "false"
-
 runs:
   using: composite
-
   steps:
     - name: Install GNU tar on Alpine
       if: ${{ runner.os == 'Linux' }}
       shell: sh
-      # Alpine's default `tar` and `bash` don't support GitHub's caches:
-      # https://github.com/actions/toolkit/issues/634
       run: |
         if [ -f /etc/alpine-release ]; then
           apk add --no-cache tar bash
         fi
-
     - name: Select Mise environment
-      shell: bash
+      shell: bash /home/runner/ghav-bin/trace-shell.sh {0}
       env:
-        # Loads `.config/mise/config.$MISE_ENV.toml` on top of `mise.toml`,
-        # which disables dev-only tools that are not used in CI.
         MISE_ENV: ${{ inputs.haskell == 'true' && 'ci' || 'ci-no-haskell' }}
-      run:
-        # We control the value passed here completely.
-        # zizmor: ignore[github-env]
-        echo "MISE_ENV=$MISE_ENV" >> "$GITHUB_ENV"
-
+        GHAV_SUB: 01-Select_Mise_environment
+      run: echo "MISE_ENV=$MISE_ENV" >> "$GITHUB_ENV"
     - name: Install Mise
       uses: jdx/mise-action@v5
       with:
         version: 2026.9.15
         bootstrap: true
         bootstrap_args: --update --yes
-
     - name: Cache npm dependencies
       uses: actions/setup-node@v6
       with:
-        # We don't specify a node-version here because we already have it
-        # installed. We use this step to setup the npm cache.
         cache: npm
         package-manager-cache: true
-
-    # We can't have the following steps in a different action because of a
-    # GitHub Actions bug with how caches interact with nested composite actions:
-    # https://github.com/actions/runner/issues/2030
-
     - name: Probe GHC and Cabal
       if: ${{ inputs.haskell == 'true' }}
       id: probe-ghc-cabal
-      shell: bash
+      shell: bash /home/runner/ghav-bin/trace-shell.sh {0}
       run: |
         set -euxo pipefail
         echo "GHC_VERSION=$(ghc --numeric-version)" >> $GITHUB_OUTPUT
         echo "CABAL_STORE=$(cabal path -v0 --store-dir)" >> $GITHUB_OUTPUT
         echo "CABAL_INDEX=$(cabal path -v0 --remote-repo-cache)" >> $GITHUB_OUTPUT
-
+      env:
+        GHAV_SUB: 04-Probe_GHC_and_Cabal
     - name: Probe system libc
       id: probe-libc
       if: ${{ inputs.haskell == 'true' && runner.os == 'Linux' }}
-      shell: bash
+      shell: bash /home/runner/ghav-bin/trace-shell.sh {0}
       run: |
         set -euxo pipefail
         # Detect the libc so the Cabal cache key keeps glibc and musl builds
@@ -77,30 +58,16 @@ runs:
           *) libc=default ;;
         esac
         echo "LIBC=$libc" >> "$GITHUB_OUTPUT"
-
-    # Based on the official recipe for Cabal caching:
-    # https://github.com/actions/cache/blob/v5.0.4/examples.md#haskell---cabal
+      env:
+        GHAV_SUB: 05-Probe_system_libc
     - name: Cache Cabal dependencies
       if: ${{ inputs.haskell == 'true' }}
       uses: actions/cache@v5
       with:
-        path:
-          # While commonly cached, we've decided not to cache:
-          #
-          # - `./dist-newstyle`: Our internal code builds quite fast, and
-          #   changes often enough that a cache would need to be invalidated on
-          #   every run, and make our cache much bigger.
-          #
-          # We do cache the Cabal store and index files, which is where the
-          # actual built packages are stored, as it is the most expensive part
-          # of the build, and easily reusable.
-          |
+        path: |
           ${{ steps.probe-ghc-cabal.outputs.CABAL_STORE }}
           ${{ steps.probe-ghc-cabal.outputs.CABAL_INDEX }}
-        key:
-          # The `v2` prefix is used so we don't mix with an older cache that
-          # didn't have a good glibc/musl detection.
-          >
+        key: |
           ${{
             format(
               'cabal-v2-{0}-{1}-{2}-{3}-{4}-{5}',
@@ -116,7 +83,7 @@ runs:
               )
             )
           }}
-        restore-keys: >
+        restore-keys: |
           ${{
             format(
               'cabal-v2-{0}-{1}-{2}-{3}-{4}-',
@@ -127,9 +94,10 @@ runs:
               steps.probe-ghc-cabal.outputs.GHC_VERSION
             )
           }}
-
     - name: Update Cabal package index
       if: ${{ inputs.haskell == 'true' }}
-      shell: bash
+      shell: bash /home/runner/ghav-bin/trace-shell.sh {0}
       working-directory: waspc
       run: cabal update
+      env:
+        GHAV_SUB: 07-Update_Cabal_package_index
